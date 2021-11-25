@@ -1,0 +1,14 @@
+def self.method_missing(method_sym, *args, &block)
+  if method_sym.to_s.ends_with?('_region')
+    # texas_region, new_mexico_region, arizona_region
+
+    str = method_sym.to_s.delete_suffix('_region')
+    region.where(state: State.send("#{str}_state"))
+  else
+    super
+  end
+end
+
+def self.respond_to_missing?(method_sym, include_private = false)
+  method_sym.to_s.ends_with?('_region') || super
+end
