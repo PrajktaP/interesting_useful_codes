@@ -1,0 +1,39 @@
+require 'csv'
+require 'open-uri'
+
+class ImportService
+  # ImportService.import_employees_from_csv(filepath: s3_url, account: nil)
+
+  def self.import_employees_from_csv(filepath: nil, account: nil)
+    local_file_name = "public/employees-#{Time.now.to_i}.csv"
+
+    ActiveRecord::Base.transaction do
+      Audited.audit_class.as_user('System') do
+        # fetch the file present at filepath
+        remote_file_path = URI.open filepath
+
+        # download the remote file into the public folder
+        IO.copy_stream(remote_file_path, local_file_name)
+
+        # read the locally downloaded file
+        csv = File.read(local_file_name)
+
+        # parse the csv and add the employees into our database
+        employees = CSV.parse(csv, headers: true).map do |row|
+          email = row['Email'].downcase
+          employee = Employee.find_or_initialize_by(email: email)
+
+          employee.company_employee_id = row['ID'] if row['ID'].present?
+          employee.name = row['Name'] if row['Name'].present?
+          employee.department = row['Group'] if row['Group'].present?
+          employee.role = row['Title'] if row['Title'].present?
+          employee.account = account
+
+          employee.save!
+        end.compact
+
+        puts "Imported #{employees.count} new records from the file #{filepath} for Account: #{account.name}"
+      end
+    end
+  end
+end
